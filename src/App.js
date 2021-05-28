@@ -23,16 +23,20 @@ function getGradient(ctx, chartArea) {
   return gradient;
 }
 
-const labels = new Array(100).fill().map((_, i) => i + 1)
+const half = new Array(20).fill().map((_, i) => Math.max(i + 1, 2))
+const values = [...half.reverse(), ...half, ...half.reverse(), ...half, ...half.reverse()]
+const labels = new Array(100).fill().map((_, i) => i)
+console.log(labels)
 const data = {
   labels,
   datasets: [
     {
       label: 'Dataset 1',
-      data: labels.map(() => Math.round(Math.random() * 100)),
+      data: values,
       fill: true,
+      startsAt: 0,
       stepped: false,
-      tension: 0,
+      lineTension: 1,
       backgroundColor: function (context) {
         const chart = context.chart;
         const { ctx, chartArea } = chart;
@@ -64,10 +68,14 @@ const MemoLineChart = memo(forwardRef((props, ref) => {
       ref={ref}
       options={{
         responsive: true,
+        scales: {
+          y: {
+            beginAtZero: true
+          }
+        },
         plugins: {
           legend: {
             display: false,
-            position: 'top',
           },
         }
       }
@@ -76,29 +84,39 @@ const MemoLineChart = memo(forwardRef((props, ref) => {
     />
   )
 }))
-function App() {
-  const [first, setFirst] = useState(30)
+function RangeChart({
+  value = [0, 100],
+  onChange = console.log
+}) {
   const [chartRef, setChartRef] = useState(null)
   const [wrapperRef, setWrapperRef] = useState(null)
-  const { width, height } = chartRef?.chartArea ?? {}
-  const [distanceFromTop, setDistanceFromTop] = useState(0)
-  const [draggingY, setDraggingY] = useState(0)
-  const [distanceFromLeft, setDistanceFromLeft] = useState(0)
+  const { height } = chartRef?.chartArea ?? {}
+  const [draggingY, setDraggingY] = useState(value[0])
+  const [draggingY2, setDraggingY2] = useState(value[1])
+  const [distanceFromLeft, setDistanceFromLeft] = useState(30)
   useEffect(() => {
     if (chartRef && wrapperRef) {
-      const { top, left } = chartRef?.chartArea ?? {}
-      const wrapperDistanceFromTop = wrapperRef.getBoundingClientRect().top
+      const { left } = chartRef?.chartArea ?? {}
       const wrapperDistanceFromLeft = wrapperRef.getBoundingClientRect().left
 
-      setDistanceFromTop(top - wrapperDistanceFromTop)
       setDistanceFromLeft(left - wrapperDistanceFromLeft)
     }
   }, [chartRef, wrapperRef])
-  const firstPosition = Math.max(draggingY, distanceFromLeft)
+  const firstPosition = ((draggingY * chartRef?.chartArea?.width) / 100) + distanceFromLeft
+  const secondPositionPercent = Math.min(Math.max(draggingY2, draggingY), 100)
+  const secondPosition = (secondPositionPercent * chartRef?.chartArea?.width) / 100 + distanceFromLeft
+  const rightWidth = chartRef?.chartArea?.width + distanceFromLeft + 7 - secondPosition || 0
+  const topDistance = 10
+
   return (
     <div ref={setWrapperRef} className="App">
       <MemoLineChart ref={setChartRef} />
-      <div className="absolute-left" style={{ height, top: distanceFromTop, width: firstPosition - distanceFromLeft + 5, left: distanceFromLeft - 5 }}></div>
+      <div className="absolute-left" style={{
+        height: height + 10,
+        top: 0,
+        width: firstPosition - distanceFromLeft + 5,
+        left: distanceFromLeft - 5
+      }}></div>
       <Draggable
         axis="x"
         allowAnyClick={false}
@@ -106,14 +124,21 @@ function App() {
         scale={1}
         offsetParent={wrapperRef}
         onDrag={x => {
-          setDraggingY(x.x)
-        }}
-        onStop={x => {
-          const start = Math.round(((x.x - distanceFromLeft) * 100) / chartRef.chartArea.width)
-          console.log(`parou perto dos ${start}%`)
+          const firstPositionPercent =
+            Math.max(Math.min(Math.round(((x.x - distanceFromLeft) * 100) / chartRef.chartArea.width), 100), 0)
+          const gonnaHitNext = firstPositionPercent + 5 > draggingY2
+          if (gonnaHitNext) {
+            const v = draggingY2 - 5;
+            setDraggingY(v)
+            onChange([v, draggingY2])
+            return false
+          } else {
+            setDraggingY(firstPositionPercent)
+            onChange([firstPositionPercent, draggingY2])
+          }
         }}
       >
-        <div className="cursor-1" style={{ height: height - 3, top: distanceFromTop }}>
+        <div className="cursor-1" style={{ height: height - 3, top: topDistance }}>
           <div className="cursor-content">
             <div className="cursor-drag">
 
@@ -122,9 +147,55 @@ function App() {
           </div>
         </div>
       </Draggable>
-      <div className="absolute-right"></div>
-    </div>
+      <div className="absolute-right"
+        style={{ height: height + 10, top: 0, width: rightWidth, right: 0 }}
+      ></div>
+      <Draggable
+        axis="x"
+        allowAnyClick={false}
+        position={{ x: secondPosition, y: 0 }}
+        scale={1}
+        offsetParent={wrapperRef}
+        onDrag={x => {
+          const positionPercent = Math.max(Math.min(Math.round(((x.x - distanceFromLeft) * 100) / chartRef.chartArea.width), 100), 0)
+          const gonnaHitNext = positionPercent - 5 < draggingY
+          if (gonnaHitNext) {
+            const v = draggingY + 5;
+            setDraggingY2(v)
+            onChange([draggingY, v])
+            return false
+          } else {
+            setDraggingY2(positionPercent)
+            onChange([draggingY, positionPercent])
+          }
+        }}
+      >
+        <div className="cursor-1" style={{ height: height - 3, top: topDistance }}>
+          <div className="cursor-content">
+            <div className="cursor-drag">
+
+            </div>
+
+          </div>
+        </div>
+      </Draggable>
+    </div >
   );
 }
 
+function App() {
+  const [range, setRange] = useState([0, 100])
+  return (
+    <div>
+      <h1> Range chart </h1>
+      <div style={{ width: 700 }}>
+        <RangeChart onChange={setRange} value={range} />
+      </div>
+      <h3>
+        {range[0]} to {range[1]}
+      </h3>
+
+    </div>
+  )
+}
 export default App;
