@@ -3,17 +3,15 @@ import { Line } from 'react-chartjs-2'
 import Draggable from 'react-draggable';
 import './App.css';
 
+// Copied
 let width, height, gradient;
 function getGradient(ctx, chartArea) {
   const chartWidth = chartArea.right - chartArea.left;
   const chartHeight = chartArea.bottom - chartArea.top;
   if (gradient === null || width !== chartWidth || height !== chartHeight) {
-    // Create the gradient because this is either the first render
-    // or the size of the chart has changed
     width = chartWidth;
     height = chartHeight;
     gradient = ctx.createLinearGradient(chartArea.right, 0, chartArea.left, 0);
-    console.log(chartWidth.create)
     gradient.addColorStop(0, "red");
     gradient.addColorStop(0.4, "orange");
     gradient.addColorStop(0.6, "yellow");
@@ -26,7 +24,14 @@ function getGradient(ctx, chartArea) {
 const half = new Array(20).fill().map((_, i) => Math.max(i + 1, 2))
 const values = [...half.reverse(), ...half, ...half.reverse(), ...half, ...half.reverse()]
 const labels = new Array(100).fill().map((_, i) => i)
-console.log(labels)
+
+function getColor(context) {
+  const chart = context.chart;
+  const { ctx, chartArea } = chart;
+
+  return chartArea && getGradient(ctx, chartArea);
+}
+
 const data = {
   labels,
   datasets: [
@@ -37,26 +42,8 @@ const data = {
       startsAt: 0,
       stepped: false,
       lineTension: 1,
-      backgroundColor: function (context) {
-        const chart = context.chart;
-        const { ctx, chartArea } = chart;
-
-        if (!chartArea) {
-          // This case happens on initial chart load
-          return null;
-        }
-        return getGradient(ctx, chartArea);
-      },
-      borderColor: function (context) {
-        const chart = context.chart;
-        const { ctx, chartArea } = chart;
-
-        if (!chartArea) {
-          // This case happens on initial chart load
-          return null;
-        }
-        return getGradient(ctx, chartArea);
-      },
+      backgroundColor: getColor,
+      borderColor: getColor,
     },
   ]
 };
@@ -68,31 +55,24 @@ const MemoLineChart = memo(forwardRef((props, ref) => {
       ref={ref}
       options={{
         responsive: true,
-        scales: {
-          y: {
-            beginAtZero: true
-          }
-        },
-        plugins: {
-          legend: {
-            display: false,
-          },
-        }
-      }
-      }
-
+        scales: { y: { beginAtZero: true } },
+        plugins: { legend: { display: false, }, }
+      }}
     />
   )
 }))
+
 function RangeChart({
   value = [0, 100],
-  onChange = console.log
+  onChange = console.log,
+  minInterval = 5
 }) {
   const [chartRef, setChartRef] = useState(null)
   const [wrapperRef, setWrapperRef] = useState(null)
-  const { height } = chartRef?.chartArea ?? {}
   const [draggingY, setDraggingY] = useState(value[0])
   const [draggingY2, setDraggingY2] = useState(value[1])
+  const firstCursorRef = useRef(null);
+  const secondCursorRef = useRef(null);
   const [distanceFromLeft, setDistanceFromLeft] = useState(30)
   useEffect(() => {
     if (chartRef && wrapperRef) {
@@ -102,9 +82,10 @@ function RangeChart({
       setDistanceFromLeft(left - wrapperDistanceFromLeft)
     }
   }, [chartRef, wrapperRef])
-  const firstPosition = ((draggingY * chartRef?.chartArea?.width) / 100) + distanceFromLeft
+  const { height = 0, width: chartWidth = 0 } = chartRef?.chartArea ?? {}
+  const firstPosition = ((draggingY * chartWidth) / 100) + distanceFromLeft
   const secondPositionPercent = Math.min(Math.max(draggingY2, draggingY), 100)
-  const secondPosition = (secondPositionPercent * chartRef?.chartArea?.width) / 100 + distanceFromLeft
+  const secondPosition = (secondPositionPercent * chartWidth) / 100 + distanceFromLeft
   const rightWidth = chartRef?.chartArea?.width + distanceFromLeft + 7 - secondPosition || 0
   const topDistance = 10
 
@@ -119,16 +100,18 @@ function RangeChart({
       }}></div>
       <Draggable
         axis="x"
+        nodeRef={firstCursorRef}
         allowAnyClick={false}
+        handle=".cursor"
         position={{ x: firstPosition, y: 0 }}
         scale={1}
         offsetParent={wrapperRef}
         onDrag={x => {
           const firstPositionPercent =
             Math.max(Math.min(Math.round(((x.x - distanceFromLeft) * 100) / chartRef.chartArea.width), 100), 0)
-          const gonnaHitNext = firstPositionPercent + 5 > draggingY2
+          const gonnaHitNext = firstPositionPercent + minInterval > draggingY2
           if (gonnaHitNext) {
-            const v = draggingY2 - 5;
+            const v = draggingY2 - minInterval;
             setDraggingY(v)
             onChange([v, draggingY2])
             return false
@@ -138,12 +121,9 @@ function RangeChart({
           }
         }}
       >
-        <div className="cursor-1" style={{ height: height - 3, top: topDistance }}>
+        <div ref={firstCursorRef} className="cursor" style={{ height: height - 3, top: topDistance }}>
           <div className="cursor-content">
-            <div className="cursor-drag">
-
-            </div>
-
+            <div className="cursor-drag"/>
           </div>
         </div>
       </Draggable>
@@ -153,14 +133,16 @@ function RangeChart({
       <Draggable
         axis="x"
         allowAnyClick={false}
+        nodeRef={secondCursorRef}
+        handle=".cursor"
         position={{ x: secondPosition, y: 0 }}
         scale={1}
         offsetParent={wrapperRef}
         onDrag={x => {
           const positionPercent = Math.max(Math.min(Math.round(((x.x - distanceFromLeft) * 100) / chartRef.chartArea.width), 100), 0)
-          const gonnaHitNext = positionPercent - 5 < draggingY
+          const gonnaHitNext = positionPercent - minInterval < draggingY
           if (gonnaHitNext) {
-            const v = draggingY + 5;
+            const v = draggingY + minInterval;
             setDraggingY2(v)
             onChange([draggingY, v])
             return false
@@ -170,7 +152,7 @@ function RangeChart({
           }
         }}
       >
-        <div className="cursor-1" style={{ height: height - 3, top: topDistance }}>
+        <div className="cursor" style={{ height: height - 3, top: topDistance }} ref={secondCursorRef}>
           <div className="cursor-content">
             <div className="cursor-drag">
 

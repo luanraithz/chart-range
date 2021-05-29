@@ -5,28 +5,20 @@
 
 .absolute-left {
   position: absolute;
-    width: calc(30% - 30px);
-    height: 100%;
-    top: 0;
     background-color: rgba(255,255,255, 0.7);
-    left: 30px;
 }
 
 .absolute-right {
   position: absolute;
-    width: calc(30% - 30px);
-    height: 100%;
-    top: 0;
-    right: 0px;
     background-color: rgba(255,255,255, 0.7);
 }
 
 
-.cursor-1 {
+.cursor {
   height: 100%;
-  border: 1px solid black;
-  background-color: black;
-  width: 3px;
+  border: 0.3px solid #b8bdbf;
+  background-color: #b8bdbf;
+  width: 0.5px;
   position: absolute;
   top: 0px;
   cursor: ew-resize;
@@ -39,11 +31,22 @@
   justify-content: center;
 }
 
+.cursor-drag:before {
+  border-bottom: 25px solid #2f7591;
+  border-left: 15px solid transparent;
+  border-right: 15px solid transparent;
+  content: "";
+  height: 0;
+  left: 0;
+  position: absolute;
+  top: 0px;
+  width: 0;
+}
+
 .cursor-drag {
   width: 30px;
   cursor: grabbing;
   height: 50px;
   position: absolute;
   bottom: -50px;
-  background-color: gray;
 }
